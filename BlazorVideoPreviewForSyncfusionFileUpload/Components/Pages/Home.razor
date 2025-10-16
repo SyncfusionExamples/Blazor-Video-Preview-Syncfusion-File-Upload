@@ -1,0 +1,164 @@
+﻿@page "/"
+
+<PageTitle>Blazor Video Preview for Syncfusion File Upload</PageTitle>
+
+@using Syncfusion.Blazor.Inputs
+@using System.IO
+@inject IJSRuntime JSRuntime
+
+<div style="margin: 150px auto; width: 50%">
+    <SfUploader @ref="uploadObj" ID="UploadFiles" AutoUpload="false" AllowMultiple="false" AllowedExtensions=".mp4,.avi,.mov,.wmv,.flv,.mkv">
+        <UploaderAsyncSettings SaveUrl="api/SampleData/Save" RemoveUrl="api/SampleData/Remove"></UploaderAsyncSettings>
+        <UploaderEvents FileSelected="@FileSelectedHandler" BeforeUpload="@BeforeUploadHandler" Progressing="@ProgressingHandler" Success="@SuccessHandler" OnFailure="@OnFailureHandler" OnClear="@OnClearHandler"></UploaderEvents>
+        <UploaderTemplates>
+            <Template>
+                <div style="display: flex; align-items: flex-start; margin: 0 auto; padding: 10px; gap: 20px; width: 100%; flex-wrap: wrap;">
+                    @if (SelectedFile != null)
+                    {
+                        <!-- Video Preview Section -->
+                        <div style="flex: 0 0 320px; max-width: 100%;">
+                            @if (SelectedFile.ObjectUrl != null && !string.IsNullOrEmpty(SelectedFile.ObjectUrl))
+                            {
+                                <video controls autoplay muted style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">
+                                    <source src="@SelectedFile.ObjectUrl" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            }
+                            else
+                            {
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; background-color: #f8f9fa; border-radius: 8px; text-align: center;">
+                                    <i class="bi bi-play-circle fs-1 mb-2" style="color: #6c757d;"></i>
+                                    <p style="margin: 0; color: #6c757d; font-size: 14px;">No video selected</p>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- File Information Panel -->
+                        <div style="flex: 1; padding: 10px; max-width: 100%;">
+                            <div class="text-muted mt-1"><strong>File Name:</strong> @(SelectedFile.Name ?? "No file selected")</div>
+                            <div class="text-muted mt-1"><strong>File Type:</strong> @(SelectedFile.Type)</div>
+                            <div class="text-muted mt-1"><strong>File Size:</strong> @(SelectedFile.Size.ToString()) bytes</div>
+                            <div class="mt-1 @SelectedFile.StatusClass"><strong>Status:</strong> @(SelectedFile?.Status?.ToString())</div>
+                        </div>
+
+                        <!-- Delete/Remove Button -->
+                        <div style="flex: 0 0 auto; padding: 10px;">
+                            @if (SelectedFile?.Status == "File uploaded successfully")
+                            {
+                                <span class="e-icons e-file-delete-btn" id="deleteIcon" title="Delete" @onclick="DeleteFile"></span>
+                            }
+                            else
+                            {
+                                <span class="e-icons e-file-remove-btn" id="remove_btn" title="Remove" @onclick="DeleteFile"></span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 180px; background-color: #f8f9fa; border-radius: 8px; text-align: center; width: 100%;">
+                            <i class="bi bi-play-circle fs-1 mb-2 e-danger"></i>
+                            <p style="margin: 0; color: #6c757d; font-size: 14px;">No video selected</p>
+                        </div>
+                    }
+                </div>
+            </Template>
+        </UploaderTemplates>
+    </SfUploader>
+</div>
+
+@code {
+    private SfUploader? uploadObj { get; set; }
+
+    private class FileData
+    {
+        public string? Name { get; set; }
+        public string? Type { get; set; }
+        public double? Size { get; set; }
+        public string? Status { get; set; }
+        public string? StatusClass { get; set; }
+        public string? ObjectUrl { get; set; }
+    }
+
+    private FileData? SelectedFile = new FileData();
+
+    private async Task FileSelectedHandler(Syncfusion.Blazor.Inputs.SelectedEventArgs args)
+    {
+        SelectedFile = null;
+        if (args.FilesData.Count == 0)
+        {
+            return;
+        }
+        if (args.FilesData[0].Status == "Ready to upload")
+        {
+            SelectedFile = new FileData
+            {
+                Name = args.FilesData[0].Name,
+                Type = args.FilesData[0].Type,
+                Size = args.FilesData[0].Size,
+                Status = args.FilesData[0].Status,
+                StatusClass = "text-muted"
+            };
+
+            try
+            {
+                SelectedFile.ObjectUrl = await JSRuntime.InvokeAsync<string>("createObjectUrl", "#UploadFiles");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating object URL: {ex.Message}");
+            }
+
+        }
+    }
+
+    private void BeforeUploadHandler(Syncfusion.Blazor.Inputs.BeforeUploadEventArgs args)
+    {
+        if (SelectedFile != null)
+        {
+            SelectedFile.Status = "Uploaded Started!";
+        }
+    }
+
+    private void ProgressingHandler(Syncfusion.Blazor.Inputs.ProgressEventArgs args)
+    {
+        if (SelectedFile != null)
+        {
+            SelectedFile.Status = "Uploading...!";
+        }
+    }
+
+    private async Task SuccessHandler(Syncfusion.Blazor.Inputs.SuccessEventArgs args)
+    {
+        if (SelectedFile != null)
+        {
+            SelectedFile.Status = "Uploaded Successfully!";
+            SelectedFile.StatusClass = "e-success";
+        }
+        if (args.Operation == "remove")
+        {
+            SelectedFile = null;
+            if (uploadObj != null)
+                await uploadObj.ClearAllAsync();
+        }
+    }
+
+    private void OnFailureHandler(Syncfusion.Blazor.Inputs.FailureEventArgs args)
+    {
+        if (SelectedFile != null)
+        {
+            SelectedFile.Status = "Upload Failed!";
+            SelectedFile.StatusClass = "e-error";
+        }
+    }
+
+    public async Task DeleteFile()
+    {
+        if (uploadObj != null)
+            await uploadObj.RemoveAsync();
+    }
+
+    private void OnClearHandler(Syncfusion.Blazor.Inputs.ClearingEventArgs args)
+    {
+        SelectedFile = null;
+    }
+}
